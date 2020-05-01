@@ -23,8 +23,12 @@ fredr_set_key('30e6ecb242a73869e11cb35f6aa3afc3') # Copy and paste your FREDR ke
 #gdp growth - do we have this
 
 rm(list = ls())
-recovery = fredr('USREC')
+recovery = drop_na(fredr('USREC',observation_start = as.Date("1990-01-01")))
+recovery[which(recovery$value==0),]$value=2                            #change 0s to 1s,recession to recovery
+recovery[which(recovery$value==1),]$value=0
+recovery[which(recovery$value==2),]$value=1
 yieldcurve = fredr('T10Y3MM')
+plot(recovery$date, recovery$value)
 gdp_pc = fredr('A229RX0A048NBEA')
 pcchange = drop_na(fredr("DPCERL1Q225SBEA"))
 unrate = fredr(series_id = "UNRATE")
