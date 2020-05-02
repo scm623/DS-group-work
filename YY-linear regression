@@ -1,5 +1,3 @@
-
-#=============================Prediction Start============================
 library(quantmod)
 library(stargazer)
 library(fredr)
@@ -15,6 +13,13 @@ library(RCurl)
 library(haven)
 library(forecast)
 library(depmixS4)
+library(do)
+library("tseries")
+library(mFilter)
+library(ggplot2)
+library(forecast)
+library(psych)
+install.packages('psych')
 fredr_set_key('30e6ecb242a73869e11cb35f6aa3afc3') # Copy and paste your FREDR key.
 
 #identify potential influential variables / data and plot to assess trends
@@ -23,15 +28,46 @@ fredr_set_key('30e6ecb242a73869e11cb35f6aa3afc3') # Copy and paste your FREDR ke
 #gdp growth - do we have this
 
 rm(list = ls())
-recovery = drop_na(fredr('USREC',observation_start = as.Date("1990-01-01")))
-recovery[which(recovery$value==0),]$value=2                            #change 0s to 1s,recession to recovery
+recovery = drop_na(fredr('USREC',observation_start = as.Date("1989-01-01")))
+recovery[which(recovery$value==0),]$value=2
 recovery[which(recovery$value==1),]$value=0
 recovery[which(recovery$value==2),]$value=1
-yieldcurve = fredr('T10Y3MM')
 plot(recovery$date, recovery$value)
+yieldcurve = fredr('T10Y3MM')
+# Variable yieldcurve
+plot(yieldcurve$date, yieldcurve$value,pch=16)
+lines(yieldcurve$date, yieldcurve$value)
+hp = hpfilter(yieldcurve$value, freq=129600, type="lambda", drift=FALSE)
+plot(yieldcurve$date, hp$trend, pch=16, col="blue", 
+     xlab = "Date", ylab = "Trend Openings in Thousands", 
+     main="De-Seasonalized Trend")
+plot(yieldcurve$date, hp$cycle, pch=16, col="blue", 
+     xlab = "Date", ylab = "Seasonal Openings in Thousands", 
+     main="Seasonal Cyclicality")
+lines(jolts$date, hp$cycle, col="blue")
+grid(lw=2)
+abline(h=0, col="red", lw=2)
+abline(h=sd(jolts$value), col="green", lw=2)
+abline(h=-sd(jolts$value), col="green", lw=2)
+
+# Variable gdp
 gdp_pc = fredr('A229RX0A048NBEA')
+plot(gdp_pc$date, gdp_pc$value,pch=16)
+lines(gdp_pc$date, gdp_pc$value)
+hp = hpfilter(gdp_pc$value, freq=6.25, type="lambda", drift=FALSE)
+plot(gdp_pc$date, hp$trend, pch=16, col="blue", 
+     xlab = "Date", ylab = "Trend Openings in Thousands", 
+     main="De-Seasonalized Trend")
+lines(gdp_pc$date, hp$trend, col="blue")
+plot(gdp_pc$date, hp$cycle, pch=16, col="blue", 
+     xlab = "Date", ylab = "Seasonal Openings in Thousands", 
+     main="Seasonal Cyclicality")
+#
 pcchange = drop_na(fredr("DPCERL1Q225SBEA"))
+plot(pcchange$date, pcchange$value,pch=16)
+lines(pcchange$date, pcchange$value)
 unrate = fredr(series_id = "UNRATE")
+#
 
 ## Merge into single time-series dataset
 data = merge(recovery, yieldcurve, by.x='date', by.y='date')
@@ -41,19 +77,45 @@ data=merge(data,unrate,by.x='date', by.y='date')
 names = c("date", "rec", "recovery","y", "yieldcurve", "g", "gdp","pc","pcchange","u","unrate")
 colnames(data)=names
 data = subset(data, select = c(date, recovery,yieldcurve,gdp,pcchange,unrate))
+head(data)
 data$yieldcurve = data$yieldcurve * 100
+plot(data$date,data$recovery,pch=16)
+lines(data$date,data$recovery)
+par(new=TRUE)
+plot(data$date,data$yieldcurve,pch=16,col='blue')
+lines(data$date,data$yieldcurve,col='blue')
+par(new=TRUE)
+plot(data$date,data$gdp,pch=16,col='red')
 summary(data)
 #creates a lagged value on the yieldcurve,gdp,pcchange,unrate variable
 data$yieldcurve.l1 = lag(data$yieldcurve, 1)
 data$gdp.l1=lag(data$gdp, 1)
 data$pcchange.l1=lag(data$pcchange, 1)
 data$unrate.l1=lag(data$unrate, 1)
+
+#=============================Linear===============================
+
+# Linear Regression
 model = lm(recovery ~ yieldcurve+ yieldcurve.l1+gdp+gdp.l1+pcchange+pcchange.l1+unrate+unrate.l1, data=data)
 stargazer(model, type="text", title="Recovery Predictor", single.row=TRUE, 
           ci=TRUE, ci.level=0.95)
+          
+#=============================Linear================================
+#=============================Arima=================================
 
+#Arima
+sub=subset(data, select = c(recovery,yieldcurve,gdp,pcchange,unrate))
+head(sub)
+corr.test(sub,use='complete')
+#1.Stationary
+#2.Whito Noise
+acf(data$yieldcurve, lag.max=5, type=c("correlation"), 
+    main="Autocorrelation of AMZN Returns")
+arima = Arima(data$recovery,data$yieldcurve,data$gdp, data$pcchange,data$unrate,order=c(1, 0, 1))
+summary(arima)
+plot(forecast(arima, h=8), include=80, col="blue")
+grid(lw=2)
+abline(h=0, lw=2)
+abline(h=mean(pcchange$value), lw=2, col="red")
 
-
-#=============================Prediction End============================
-
-
+#=============================Arima===============================
