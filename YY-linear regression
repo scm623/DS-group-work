@@ -108,7 +108,7 @@ sub=subset(data, select = c(recovery,yieldcurve,gdp,pcchange,unrate))
 head(sub)
 corr.test(sub,use='complete')
 #1.Stationary
-#2.Whito Noise
+#2.White Noise
 acf(data$yieldcurve, lag.max=5, type=c("correlation"), 
     main="Autocorrelation of AMZN Returns")
 arima = Arima(data$recovery,data$yieldcurve,data$gdp, data$pcchange,data$unrate,order=c(1, 0, 1))
