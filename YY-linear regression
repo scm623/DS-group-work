@@ -116,6 +116,6 @@ summary(arima)
 plot(forecast(arima, h=8), include=80, col="blue")
 grid(lw=2)
 abline(h=0, lw=2)
-abline(h=mean(pcchange$value), lw=2, col="red")
+
 
 #=============================Arima===============================
